@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Memento Mori · Una vida en semanas</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/svg2pdf.js/2.2.1/svg2pdf.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Georgia, 'Times New Roman', serif; background: #fff; color: #111; }
+
+  /* ── Setup screen ── */
+  #setup {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: #fff;
+  }
+  #setup .card { max-width: 400px; width: 90%; text-align: center; }
+  #setup .eyebrow { font-size: 9px; letter-spacing: 6px; color: #bbb; text-transform: uppercase; margin-bottom: 20px; }
+  #setup h1 { font-size: 30px; font-weight: normal; letter-spacing: 4px; color: #111; margin-bottom: 6px; }
+  #setup .sub { font-size: 10px; color: #ccc; letter-spacing: 3px; margin-bottom: 44px; }
+  #setup label { display: block; text-align: left; font-size: 9px; letter-spacing: 2px; color: #aaa; text-transform: uppercase; margin-bottom: 6px; }
+  #setup input[type=text], #setup input[type=date] {
+    display: block; width: 100%; border: 1px solid #e8e8e8; padding: 10px 12px;
+    font-family: Georgia, serif; font-size: 13px; color: #333; outline: none; margin-bottom: 20px;
+  }
+  #setup .stats { font-size: 10px; color: #999; letter-spacing: 1px; margin-top: -12px; margin-bottom: 20px; text-align: left; }
+  #setup .go-btn {
+    width: 100%; padding: 14px; background: #111; color: #fff; border: none;
+    font-family: Georgia, serif; font-size: 10px; letter-spacing: 3px; text-transform: uppercase;
+    cursor: pointer; margin-top: 10px;
+  }
+  #setup .go-btn:disabled { background: #f0f0f0; color: #bbb; cursor: not-allowed; }
+  #setup .note { font-size: 9px; color: #ddd; margin-top: 20px; letter-spacing: 1px; }
+
+  /* ── App screen ── */
+  #app { display: none; flex-direction: column; min-height: 100vh; }
+
+  /* Top bar */
+  #topbar {
+    background: #fff; border-bottom: 1px solid #e8e8e8;
+    padding: 12px 28px; display: flex; align-items: center; gap: 16px;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .ghost-btn {
+    background: transparent; border: 1px solid #e5e5e5; color: #aaa;
+    padding: 7px 14px; font-size: 9px; letter-spacing: 1px; cursor: pointer;
+    font-family: Georgia, serif; text-transform: uppercase;
+  }
+  .ghost-btn:hover { border-color: #bbb; color: #666; }
+  #topbar .info { flex: 1; display: flex; align-items: center; gap: 12px; }
+  #topbar .label { font-size: 9px; letter-spacing: 2px; color: #bbb; }
+  #topbar .username { font-size: 13px; color: #444; }
+  #topbar .pct { font-size: 10px; color: #aaa; }
+  #export-btn {
+    background: #111; color: #fff; border: none;
+    padding: 10px 22px; font-size: 9px; letter-spacing: 2px; text-transform: uppercase;
+    cursor: pointer; font-family: Georgia, serif;
+  }
+  #export-btn:disabled { background: #eee; color: #aaa; cursor: not-allowed; }
+
+  /* Layout */
+  #layout { display: flex; flex: 1; }
+
+  /* Sidebar */
+  #sidebar {
+    width: 288px; flex-shrink: 0; background: #fff;
+    border-right: 1px solid #ebebeb; padding: 20px 18px;
+    overflow-y: auto; max-height: calc(100vh - 53px);
+    position: sticky; top: 53px;
+  }
+  .section-label { font-size: 8px; letter-spacing: 3px; color: #bbb; text-transform: uppercase; margin-bottom: 14px; }
+  .form-box { border: 1px solid #f0f0f0; background: #fafafa; padding: 14px; margin-bottom: 18px; }
+  .mini-label { font-size: 8px; letter-spacing: 2px; color: #bbb; text-transform: uppercase; margin-bottom: 5px; }
+  .sb-input {
+    display: block; width: 100%; border: 1px solid #e8e8e8; padding: 7px 9px;
+    font-family: Georgia, serif; font-size: 11px; color: #333; outline: none; margin-bottom: 8px;
+  }
+  .shape-picker { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
+  .shape-btn {
+    width: 26px; height: 26px; background: transparent;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; border-radius: 2px; padding: 0; border: 1px solid #e5e5e5;
+  }
+  .shape-btn.active { border: 1.5px solid #111 !important; }
+  .color-picker { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 12px; }
+  .color-dot {
+    width: 15px; height: 15px; border-radius: 50%; cursor: pointer;
+    outline: none; border: none;
+  }
+  .preview-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 10px; color: #888; }
+  .add-btn {
+    width: 100%; padding: 9px; background: #111; color: #fff; border: none;
+    font-family: Georgia, serif; font-size: 9px; letter-spacing: 2px;
+    text-transform: uppercase; cursor: pointer;
+  }
+  .event-item { border: 1px solid #f0f0f0; padding: 10px 11px; margin-bottom: 6px; background: #fff; }
+  .event-row { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
+  .event-name-input {
+    flex: 1; border: 1px solid #eee; padding: 4px 7px;
+    font-family: Georgia, serif; font-size: 10px; color: #333; outline: none;
+  }
+  .del-btn { background: transparent; border: none; color: #ccc; cursor: pointer; font-size: 14px; padding: 0 3px; }
+  .event-date-input {
+    width: 100%; border: 1px solid #eee; padding: 4px 7px;
+    font-family: Georgia, serif; font-size: 10px; color: #333; outline: none; margin-bottom: 7px;
+  }
+  .mini-shapes { display: flex; gap: 3px; flex-wrap: wrap; }
+  .mini-shape-btn {
+    width: 21px; height: 21px; background: transparent;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; border-radius: 2px; padding: 0; border: 1px solid #eee;
+  }
+  .mini-shape-btn.active { border: 1.5px solid #111 !important; }
+  .mini-colors { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 4px; }
+  .mini-color-dot { width: 12px; height: 12px; border-radius: 50%; cursor: pointer; }
+  .legend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 9px; color: #aaa; }
+  .print-note { font-size: 8px; color: #ccc; letter-spacing: 1px; line-height: 1.7; margin-top: 20px; }
+
+  /* ── Week chip ── */
+  .week-chip {
+    display: none; align-items: baseline; gap: 6px;
+    background: #f7f7f5; border-left: 2px solid #111;
+    padding: 6px 10px; margin-bottom: 10px;
+    animation: chipIn .15s ease;
+  }
+  .week-chip.visible { display: flex; }
+  .week-chip .wnum { font-size: 15px; color: #111; letter-spacing: -0.5px; line-height: 1; }
+  .week-chip .wlabel { font-size: 8px; color: #aaa; letter-spacing: 1px; text-transform: uppercase; }
+  .week-chip .wsub { font-size: 8px; color: #bbb; letter-spacing: 0.5px; }
+  .week-chip-mini {
+    display: none; font-size: 8px; color: #999; letter-spacing: 0.5px;
+    padding: 3px 0 5px 2px; line-height: 1.4;
+  }
+  .week-chip-mini.visible { display: block; }
+  @keyframes chipIn { from { opacity:0; transform:translateY(-3px); } to { opacity:1; transform:translateY(0); } }
+
+  /* Preview */
+  #preview-wrap {
+    flex: 1; background: #ece9e4; padding: 28px;
+    overflow: auto; display: flex; flex-direction: column; align-items: center;
+  }
+  .preview-title { font-size: 9px; letter-spacing: 2px; color: #aaa; text-transform: uppercase; margin-bottom: 16px; text-align: center; }
+  #svg-container {
+    width: 100%; max-width: 640px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.13);
+    background: #fff;
+  }
+  #svg-container svg { display: block; width: 100%; height: auto; }
+  .preview-footer { font-size: 9px; color: #bbb; margin-top: 14px; letter-spacing: 1px; text-align: center; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     SETUP SCREEN
+════════════════════════════════════════════════ -->
+<div id="setup">
+  <div class="card">
+    <div class="eyebrow">Una vida en semanas</div>
+    <h1>MEMENTO MORI</h1>
+    <div class="sub">RECUERDA QUE MORIRÁS</div>
+
+    <label for="inp-name">Tu nombre (opcional)</label>
+    <input type="text" id="inp-name" placeholder="Nombre completo" autocomplete="off">
+
+    <label for="inp-dob">Fecha de nacimiento</label>
+    <input type="date" id="inp-dob" max="">
+    <div class="stats" id="setup-stats" style="display:none"></div>
+
+    <button class="go-btn" id="go-btn" disabled onclick="goToApp()">
+      Ver mi calendario →
+    </button>
+    <div class="note">Proyección a 85 años · 4,420 semanas en total</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     APP SCREEN
+════════════════════════════════════════════════ -->
+<div id="app">
+
+  <!-- Top bar -->
+  <div id="topbar">
+    <button class="ghost-btn" onclick="backToSetup()">← Volver</button>
+    <div class="info">
+      <span class="label">MEMENTO MORI</span>
+      <span class="username" id="tb-name"></span>
+      <span class="pct" id="tb-pct"></span>
+    </div>
+    <button id="export-btn" onclick="exportPDF()">↓ Exportar PDF</button>
+  </div>
+
+  <div id="layout">
+
+    <!-- Sidebar -->
+    <div id="sidebar">
+      <div class="section-label">Eventos canónicos</div>
+
+      <div class="form-box">
+        <input type="text" class="sb-input" id="ev-label" placeholder="Nombre del evento"
+          onkeydown="if(event.key==='Enter') addEvent()">
+        <input type="date" class="sb-input" id="ev-date" max="" oninput="updateNewEvChip()">
+
+        <!-- Week chip -->
+        <div class="week-chip" id="ev-week-chip">
+          <span class="wnum" id="ev-chip-num">—</span>
+          <div>
+            <div class="wlabel">semana de tu vida</div>
+            <div class="wsub" id="ev-chip-sub"></div>
+          </div>
+        </div>
+
+        <div class="mini-label">Forma</div>
+        <div class="shape-picker" id="shape-picker"></div>
+
+        <div class="mini-label">Color</div>
+        <div class="color-picker" id="color-picker"></div>
+
+        <div class="preview-row">
+          <svg id="ev-preview-icon" width="14" height="14" viewBox="0 0 10 10"></svg>
+          <span id="ev-preview-label" style="font-size:10px;color:#888">Preview del evento</span>
+        </div>
+
+        <button class="add-btn" onclick="addEvent()">+ Agregar evento</button>
+      </div>
+
+      <div id="events-list"></div>
+
+      <!-- Legend -->
+      <div style="border-top:1px solid #f5f5f5; padding-top:16px; margin-top:8px;">
+        <div class="mini-label" style="margin-bottom:10px">Leyenda</div>
+        <div class="legend-row">
+          <svg width="9" height="9" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4.5" fill="#d0d0d0"/></svg>
+          Semana vivida
+        </div>
+        <div class="legend-row">
+          <svg width="9" height="9" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="none" stroke="#e4e4e4" stroke-width="0.7"/></svg>
+          Semana futura
+        </div>
+        <div class="legend-row">
+          <svg width="9" height="9" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4.5" fill="#111"/></svg>
+          Hoy
+        </div>
+      </div>
+
+      <div class="print-note">
+        Tamaño de impresión:<br>
+        Doble carta · 27.9 × 43.2 cm<br>
+        Recomendado: papel 120–200 g/m²<br>
+        El PDF exporta vectores puros.
+      </div>
+    </div>
+
+    <!-- Preview -->
+    <div id="preview-wrap">
+      <div class="preview-title">Vista previa · Doble carta 27.9 × 43.2 cm</div>
+      <div id="svg-container"></div>
+      <div class="preview-footer">
+        El PDF exportado conserva vectores — imprime a cualquier resolución sin pérdida de calidad
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════════
+const MAX_AGE = 85;
+const TOTAL_WEEKS = MAX_AGE * 52;
+const COLORS = ["#e11d48","#f97316","#f59e0b","#84cc16","#10b981","#06b6d4","#3b82f6","#8b5cf6","#ec4899","#6b7280"];
+const SHAPES = ["circle","square","triangle","heart","star","diamond","asterisk"];
+
+// State
+let state = {
+  name: "", dob: null,
+  weeksLived: 0,
+  events: [],
+  newShape: "heart",
+  newColor: "#e11d48",
+};
+
+// ═══════════════════════════════════════════════════════════════
+// SETUP
+// ═══════════════════════════════════════════════════════════════
+const todayStr = new Date().toISOString().split("T")[0];
+document.getElementById("inp-dob").max = todayStr;
+document.getElementById("ev-date").max = todayStr;
+
+document.getElementById("inp-dob").addEventListener("change", function() {
+  const dob = parseDate(this.value);
+  if (!dob) return;
+  state.dob = dob;
+  state.weeksLived = getWeeksLived(dob);
+  const pct = ((state.weeksLived / TOTAL_WEEKS) * 100).toFixed(1);
+  const stats = document.getElementById("setup-stats");
+  stats.style.display = "block";
+  stats.textContent = `${state.weeksLived.toLocaleString()} semanas vividas de ${TOTAL_WEEKS.toLocaleString()} (${pct}%)`;
+  document.getElementById("go-btn").disabled = false;
+});
+
+function goToApp() {
+  state.name = document.getElementById("inp-name").value.trim();
+  document.getElementById("setup").style.display = "none";
+  document.getElementById("app").style.display = "flex";
+  // topbar
+  document.getElementById("tb-name").textContent = state.name;
+  const pct = ((state.weeksLived / TOTAL_WEEKS) * 100).toFixed(1);
+  document.getElementById("tb-pct").textContent = `${pct}% vivido`;
+  // init sidebar
+  buildShapePicker();
+  buildColorPicker();
+  updatePreview();
+}
+
+function backToSetup() {
+  document.getElementById("app").style.display = "none";
+  document.getElementById("setup").style.display = "flex";
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DATE HELPERS
+// ═══════════════════════════════════════════════════════════════
+function parseDate(str) {
+  if (!str) return null;
+  const [y,m,d] = str.split("-").map(Number);
+  return new Date(y, m-1, d);
+}
+
+function getWeeksLived(birth, ref = new Date()) {
+  return Math.max(0, Math.floor((ref - birth) / (7*24*60*60*1000)));
+}
+
+function dateStrToWeek(str) {
+  const d = parseDate(str);
+  if (!d || !state.dob) return -1;
+  return getWeeksLived(state.dob, d);
+}
+
+function formatAge(weeks) {
+  return `${Math.floor(weeks/52)} años, ${weeks%52} semanas`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// EVENT MAP
+// ═══════════════════════════════════════════════════════════════
+function buildEventMap() {
+  const map = {};
+  state.events.forEach(ev => {
+    const w = dateStrToWeek(ev.date);
+    if (w >= 0 && w < TOTAL_WEEKS) {
+      if (!map[w]) map[w] = [];
+      map[w].push(ev);
+    }
+  });
+  return map;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SHAPE PATHS
+// ═══════════════════════════════════════════════════════════════
+function shapePath(shape, cx, cy, r) {
+  switch(shape) {
+    case "square": { const s=r*1.55; return `M${cx-s},${cy-s}h${s*2}v${s*2}h${-s*2}z`; }
+    case "triangle": return `M${cx},${cy-r*1.3}L${cx+r*1.2},${cy+r*0.9}L${cx-r*1.2},${cy+r*0.9}z`;
+    case "heart": {
+      const s=r*1.05;
+      return `M${cx},${cy+s*0.9}C${cx},${cy+s*0.9}${cx-s*1.5},${cy-s*0.15}${cx-s*0.8},${cy-s*0.85}C${cx-s*0.3},${cy-s*1.35}${cx},${cy-s*0.55}${cx},${cy-s*0.55}C${cx},${cy-s*0.55}${cx+s*0.3},${cy-s*1.35}${cx+s*0.8},${cy-s*0.85}C${cx+s*1.5},${cy-s*0.15}${cx},${cy+s*0.9}${cx},${cy+s*0.9}z`;
+    }
+    case "star": {
+      const pts=[];
+      for(let i=0;i<10;i++){
+        const a=(i*Math.PI)/5-Math.PI/2;
+        const rad=i%2===0?r*1.2:r*0.5;
+        pts.push(`${cx+rad*Math.cos(a)},${cy+rad*Math.sin(a)}`);
+      }
+      return `M${pts.join("L")}z`;
+    }
+    case "diamond": return `M${cx},${cy-r*1.4}L${cx+r*1.1},${cy}L${cx},${cy+r*1.4}L${cx-r*1.1},${cy}z`;
+    default: return null;
+  }
+}
+
+function makeSvgShapeEl(shape, color, cx, cy, r, ns="http://www.w3.org/2000/svg") {
+  if (shape === "circle") {
+    const el = document.createElementNS(ns, "circle");
+    el.setAttribute("cx", cx); el.setAttribute("cy", cy);
+    el.setAttribute("r", r); el.setAttribute("fill", color);
+    return el;
+  }
+  if (shape === "asterisk") {
+    const g = document.createElementNS(ns, "g");
+    const sw = r*0.45;
+    [[cx,cy-r,cx,cy+r],[cx-r,cy,cx+r,cy],
+     [cx-r*.7,cy-r*.7,cx+r*.7,cy+r*.7],[cx+r*.7,cy-r*.7,cx-r*.7,cy+r*.7]
+    ].forEach(([x1,y1,x2,y2]) => {
+      const l = document.createElementNS(ns, "line");
+      l.setAttribute("x1",x1); l.setAttribute("y1",y1);
+      l.setAttribute("x2",x2); l.setAttribute("y2",y2);
+      l.setAttribute("stroke",color); l.setAttribute("stroke-width",sw);
+      l.setAttribute("stroke-linecap","round");
+      g.appendChild(l);
+    });
+    return g;
+  }
+  const d = shapePath(shape, cx, cy, r);
+  if (!d) return null;
+  const el = document.createElementNS(ns, "path");
+  el.setAttribute("d", d); el.setAttribute("fill", color);
+  return el;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INLINE SVG ICON (for sidebar)
+// ═══════════════════════════════════════════════════════════════
+function makeInlineSvg(shape, color, size=10) {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("width", size); svg.setAttribute("height", size);
+  svg.setAttribute("viewBox", `0 0 ${size} ${size}`);
+  const r = size * 0.44;
+  const cx = size/2, cy = size/2;
+  const el = makeSvgShapeEl(shape, color, cx, cy, r, ns);
+  if (el) svg.appendChild(el);
+  return svg;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// WEEK CHIP (new event form)
+// ═══════════════════════════════════════════════════════════════
+function updateNewEvChip() {
+  const dateVal = document.getElementById("ev-date").value;
+  const chip    = document.getElementById("ev-week-chip");
+  const numEl   = document.getElementById("ev-chip-num");
+  const subEl   = document.getElementById("ev-chip-sub");
+
+  if (!dateVal || !state.dob) { chip.classList.remove("visible"); return; }
+
+  const w = dateStrToWeek(dateVal);
+  if (w < 0 || w > TOTAL_WEEKS) { chip.classList.remove("visible"); return; }
+
+  const yr  = Math.floor(w / 52);
+  const wk  = (w % 52) + 1;
+  const isFuture = w > state.weeksLived;
+
+  numEl.textContent = w.toLocaleString();
+  subEl.textContent = `Año ${yr} de tu vida · semana ${wk} de ese año${isFuture ? " · (futura)" : ""}`;
+  chip.classList.add("visible");
+}
+
+// BUILD SIDEBAR UI
+// ═══════════════════════════════════════════════════════════════
+function buildShapePicker() {
+  const container = document.getElementById("shape-picker");
+  container.innerHTML = "";
+  SHAPES.forEach(sh => {
+    const btn = document.createElement("button");
+    btn.className = "shape-btn" + (sh === state.newShape ? " active" : "");
+    btn.title = sh;
+    btn.appendChild(makeInlineSvg(sh, sh === state.newShape ? "#111" : "#ccc", 13));
+    btn.onclick = () => {
+      state.newShape = sh;
+      buildShapePicker();
+      buildColorPicker();
+      updatePreviewIcon();
+    };
+    container.appendChild(btn);
+  });
+}
+
+function buildColorPicker() {
+  const container = document.getElementById("color-picker");
+  container.innerHTML = "";
+  COLORS.forEach(c => {
+    const dot = document.createElement("div");
+    dot.className = "color-dot";
+    dot.style.background = c;
+    dot.style.outline = c === state.newColor ? `2px solid ${c}` : "none";
+    dot.style.outlineOffset = "2px";
+    dot.onclick = () => {
+      state.newColor = c;
+      buildColorPicker();
+      updatePreviewIcon();
+    };
+    container.appendChild(dot);
+  });
+}
+
+function updatePreviewIcon() {
+  const icon = document.getElementById("ev-preview-icon");
+  icon.innerHTML = "";
+  const r = 4.4, cx = 5, cy = 5;
+  const ns = "http://www.w3.org/2000/svg";
+  const el = makeSvgShapeEl(state.newShape, state.newColor, cx, cy, r, ns);
+  if (el) icon.appendChild(el);
+  const lbl = document.getElementById("ev-label").value.trim();
+  document.getElementById("ev-preview-label").textContent = lbl || "Preview del evento";
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("ev-label").addEventListener("input", updatePreviewIcon);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// ADD / REMOVE / UPDATE EVENTS
+// ═══════════════════════════════════════════════════════════════
+function addEvent() {
+  const label = document.getElementById("ev-label").value.trim();
+  const date = document.getElementById("ev-date").value;
+  if (!label || !date) return;
+  state.events.push({ id: Date.now(), label, date, shape: state.newShape, color: state.newColor });
+  document.getElementById("ev-label").value = "";
+  document.getElementById("ev-date").value = "";
+  document.getElementById("ev-week-chip").classList.remove("visible");
+  renderEventsList();
+  updatePreview();
+}
+
+function removeEvent(id) {
+  state.events = state.events.filter(e => e.id !== id);
+  renderEventsList();
+  updatePreview();
+}
+
+function updateEventField(id, field, value) {
+  const ev = state.events.find(e => e.id === id);
+  if (ev) { ev[field] = value; renderEventsList(); updatePreview(); }
+}
+
+function renderEventsList() {
+  const container = document.getElementById("events-list");
+  container.innerHTML = "";
+  if (!state.events.length) {
+    container.innerHTML = '<p style="font-size:10px;color:#ccc;text-align:center;padding:16px 0">Aún no hay eventos.<br>Agrega los hitos de tu vida.</p>';
+    return;
+  }
+  state.events.forEach(ev => {
+    const div = document.createElement("div");
+    div.className = "event-item";
+
+    // Row 1: icon + name + delete
+    const row1 = document.createElement("div");
+    row1.className = "event-row";
+    const icon = makeInlineSvg(ev.shape, ev.color, 10);
+    row1.appendChild(icon);
+    const nameIn = document.createElement("input");
+    nameIn.className = "event-name-input";
+    nameIn.value = ev.label;
+    nameIn.onchange = function() { updateEventField(ev.id, "label", this.value); };
+    row1.appendChild(nameIn);
+    const del = document.createElement("button");
+    del.className = "del-btn";
+    del.innerHTML = "✕";
+    del.onclick = () => removeEvent(ev.id);
+    row1.appendChild(del);
+    div.appendChild(row1);
+
+    // Date + week chip
+    const dateIn = document.createElement("input");
+    dateIn.type = "date";
+    dateIn.className = "event-date-input";
+    dateIn.value = ev.date;
+    dateIn.max = todayStr;
+    dateIn.onchange = function() { updateEventField(ev.id, "date", this.value); };
+    div.appendChild(dateIn);
+
+    // Mini week chip for saved event
+    const chip = document.createElement("div");
+    chip.className = "week-chip-mini";
+    if (ev.date) {
+      const w = dateStrToWeek(ev.date);
+      if (w >= 0) {
+        const yr = Math.floor(w / 52), wk = (w % 52) + 1;
+        chip.textContent = `Semana ${w.toLocaleString()} de tu vida · Año ${yr}, sem. ${wk}`;
+        chip.classList.add("visible");
+      }
+    }
+    div.appendChild(chip);
+
+    dateIn.onchange = function() {
+      updateEventField(ev.id, "date", this.value);
+      // update chip immediately
+      const w2 = dateStrToWeek(this.value);
+      if (w2 >= 0) {
+        const yr2 = Math.floor(w2/52), wk2 = (w2%52)+1;
+        chip.textContent = `Semana ${w2.toLocaleString()} de tu vida · Año ${yr2}, sem. ${wk2}`;
+        chip.classList.add("visible");
+      } else { chip.classList.remove("visible"); }
+    };
+
+    // Mini shapes + colors
+    const ms = document.createElement("div");
+    ms.className = "mini-shapes";
+    SHAPES.forEach(sh => {
+      const btn = document.createElement("button");
+      btn.className = "mini-shape-btn" + (sh === ev.shape ? " active" : "");
+      btn.appendChild(makeInlineSvg(sh, sh === ev.shape ? "#111" : "#ccc", 9));
+      btn.onclick = () => { ev.shape = sh; renderEventsList(); updatePreview(); };
+      ms.appendChild(btn);
+    });
+    div.appendChild(ms);
+
+    const mc = document.createElement("div");
+    mc.className = "mini-colors";
+    COLORS.forEach(c => {
+      const dot = document.createElement("div");
+      dot.className = "mini-color-dot";
+      dot.style.background = c;
+      dot.style.outline = c === ev.color ? `2px solid ${c}` : "none";
+      dot.style.outlineOffset = "1.5px";
+      dot.onclick = () => { ev.color = c; renderEventsList(); updatePreview(); };
+      mc.appendChild(dot);
+    });
+    div.appendChild(mc);
+
+    container.appendChild(div);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BUILD THE CALENDAR SVG (DOM-based, for both preview & export)
+// ═══════════════════════════════════════════════════════════════
+function buildCalendarSVG() {
+  const ns = "http://www.w3.org/2000/svg";
+  const W = 279, H = 432;
+  const mL = 18, mR = 12, mT = 32, mB = 20;
+  const gridW = W - mL - mR;
+  const gridH = H - mT - mB - 26;
+  const cellW = gridW / 52;
+  const cellH = gridH / MAX_AGE;
+  const dotR = cellW * 0.37;
+  const headerY = mT - 6;
+  const gridStartY = mT + 10;
+  const footerY = H - mB + 2;
+  const pct = ((state.weeksLived / TOTAL_WEEKS)*100).toFixed(1);
+  const eventMap = buildEventMap();
+
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("xmlns", ns);
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("width", `${W}mm`);
+  svg.setAttribute("height", `${H}mm`);
+  svg.style.fontFamily = "Georgia, 'Times New Roman', serif";
+
+  const mk = (tag, attrs={}) => {
+    const el = document.createElementNS(ns, tag);
+    Object.entries(attrs).forEach(([k,v]) => el.setAttribute(k,v));
+    return el;
+  };
+  const mkText = (content, attrs={}) => {
+    const el = mk("text", attrs);
+    el.textContent = content;
+    return el;
+  };
+
+  // Background
+  svg.appendChild(mk("rect", { width:W, height:H, fill:"white" }));
+
+  // Header
+  svg.appendChild(mkText("MEMENTO MORI · RECUERDA QUE MORIRÁS", {
+    x: mL, y: headerY - 7,
+    "font-size": 3.8, "letter-spacing": 2, fill: "#bbb", "text-anchor": "start"
+  }));
+  if (state.name) {
+    svg.appendChild(mkText(state.name.toUpperCase(), {
+      x: mL, y: headerY,
+      "font-size": 7, "letter-spacing": 1.5, fill: "#111"
+    }));
+  }
+  svg.appendChild(mkText(formatAge(state.weeksLived) + " vividos", {
+    x: W - mR, y: headerY - 7,
+    "font-size": 3.8, "letter-spacing": 1, fill: "#bbb", "text-anchor": "end"
+  }));
+  svg.appendChild(mkText(pct + "%", {
+    x: W - mR, y: headerY + 0.5,
+    "font-size": 8, "letter-spacing": -0.5, fill: "#111", "text-anchor": "end"
+  }));
+
+  // Header rule
+  svg.appendChild(mk("line", { x1:mL, y1:headerY+4, x2:W-mR, y2:headerY+4, stroke:"#ddd", "stroke-width":0.25 }));
+  // Progress
+  const progW = gridW * (state.weeksLived / TOTAL_WEEKS);
+  svg.appendChild(mk("line", { x1:mL, y1:headerY+4, x2:mL+progW, y2:headerY+4, stroke:"#111", "stroke-width":1.1 }));
+
+  // Age labels top
+  [0,10,20,30,40,50,60,70,80,85].forEach(yr => {
+    svg.appendChild(mkText(yr.toString(), {
+      x: mL + (yr/85)*gridW, y: gridStartY - 2.5,
+      "font-size": 2.8, fill: "#ccc", "text-anchor": "middle"
+    }));
+  });
+
+  // Grid
+  for (let yr = 0; yr < MAX_AGE; yr++) {
+    const rowY = gridStartY + yr * cellH + cellH / 2;
+
+    // Year label
+    if (yr % 5 === 0 || yr === state.weeksLived / 52 | 0) {
+      svg.appendChild(mkText(yr.toString(), {
+        x: mL - 1.5, y: rowY + 1.1,
+        "font-size": 2.6, fill: yr % 5 === 0 ? "#aaa" : "#ddd", "text-anchor": "end"
+      }));
+    }
+
+    for (let wk = 0; wk < 52; wk++) {
+      const weekIdx = yr * 52 + wk;
+      const cx = mL + wk * cellW + cellW / 2;
+      const cy = rowY;
+      const lived = weekIdx < state.weeksLived;
+      const isNow = weekIdx === state.weeksLived;
+      const evs = eventMap[weekIdx];
+
+      let el;
+      if (isNow) {
+        el = mk("circle", { cx, cy, r: dotR, fill: "#111" });
+      } else if (evs?.length > 0) {
+        el = makeSvgShapeEl(evs[0].shape, evs[0].color, cx, cy, dotR * 1.05, ns);
+      } else if (lived) {
+        el = mk("circle", { cx, cy, r: dotR, fill: "#d0d0d0" });
+      } else {
+        el = mk("circle", { cx, cy, r: dotR, fill: "none", stroke: "#e8e8e8", "stroke-width": 0.28 });
+      }
+      if (el) svg.appendChild(el);
+    }
+  }
+
+  // Footer legend
+  let lx = mL;
+  const ly = footerY;
+  const lr = dotR * 1.1;
+
+  svg.appendChild(mk("line", { x1:mL, y1:ly-3, x2:W-mR, y2:ly-3, stroke:"#eee", "stroke-width":0.2 }));
+
+  // Static legend items
+  const legendItems = [
+    { type:"lived" }, { type:"future" }, { type:"now" },
+    ...state.events.map(ev => ({ type:"event", shape:ev.shape, color:ev.color, label:ev.label }))
+  ];
+  const LABELS = { lived:"Semana vivida", future:"Semana futura", now:"Hoy" };
+
+  legendItems.forEach(item => {
+    let icon;
+    if (item.type === "lived")  icon = mk("circle", { cx:lx+lr, cy:ly+1.8, r:lr, fill:"#d0d0d0" });
+    if (item.type === "future") icon = mk("circle", { cx:lx+lr, cy:ly+1.8, r:lr, fill:"none", stroke:"#e4e4e4", "stroke-width":0.32 });
+    if (item.type === "now")    icon = mk("circle", { cx:lx+lr, cy:ly+1.8, r:lr, fill:"#111" });
+    if (item.type === "event")  icon = makeSvgShapeEl(item.shape, item.color, lx+lr, ly+1.8, lr, ns);
+    if (icon) svg.appendChild(icon);
+
+    const lbl = item.label || LABELS[item.type];
+    const txtEl = mkText(lbl, {
+      x: lx + lr*2 + 1.5, y: ly + 3.2,
+      "font-size": 2.8, fill: item.type === "event" ? "#777" : "#aaa"
+    });
+    svg.appendChild(txtEl);
+
+    const approxW = lbl.length * 1.75 + lr*2 + 4;
+    lx += approxW;
+  });
+
+  // Watermark
+  svg.appendChild(mkText(`MEMENTO MORI · UNA VIDA EN SEMANAS · ${MAX_AGE} AÑOS · ${TOTAL_WEEKS} SEMANAS`, {
+    x: W - mR, y: H - 3.5,
+    "font-size": 2.2, fill: "#ddd", "text-anchor": "end", "letter-spacing": 0.8
+  }));
+
+  return svg;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// UPDATE PREVIEW
+// ═══════════════════════════════════════════════════════════════
+function updatePreview() {
+  const container = document.getElementById("svg-container");
+  container.innerHTML = "";
+  const svg = buildCalendarSVG();
+  // Override size for preview (responsive)
+  svg.removeAttribute("width");
+  svg.removeAttribute("height");
+  svg.style.width = "100%";
+  svg.style.height = "auto";
+  container.appendChild(svg);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// EXPORT PDF (vector via svg2pdf)
+// ═══════════════════════════════════════════════════════════════
+async function exportPDF() {
+  const btn = document.getElementById("export-btn");
+  btn.disabled = true;
+  btn.textContent = "Exportando...";
+
+  try {
+    // Build the export SVG with correct mm dimensions
+    const svgEl = buildCalendarSVG();
+    // Attach temporarily to body (hidden) so svg2pdf can measure it
+    svgEl.style.position = "absolute";
+    svgEl.style.left = "-99999px";
+    document.body.appendChild(svgEl);
+
+    // Double carta: 279 × 432 mm
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:[279, 432], compress:true });
+
+    if (window.svg2pdf) {
+      await window.svg2pdf(svgEl, doc, { x:0, y:0, width:279, height:432 });
+    } else {
+      // Fallback: high-res raster
+      const canvas = document.createElement("canvas");
+      const DPI = 300;
+      canvas.width  = Math.round((279/25.4) * DPI);
+      canvas.height = Math.round((432/25.4) * DPI);
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const serializer = new XMLSerializer();
+      let svgStr = serializer.serializeToString(svgEl);
+      if (!svgStr.includes('xmlns=')) svgStr = svgStr.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
+      const blob = new Blob([svgStr], { type:"image/svg+xml;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      await new Promise((res,rej) => { img.onload=res; img.onerror=rej; img.src=url; });
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      const imgData = canvas.toDataURL("image/png", 1.0);
+      doc.addImage(imgData, "PNG", 0, 0, 279, 432, undefined, "FAST");
+    }
+
+    document.body.removeChild(svgEl);
+    const safeName = state.name ? `_${state.name.replace(/\s+/g,"_")}` : "";
+    doc.save(`memento_mori${safeName}.pdf`);
+
+  } catch(err) {
+    console.error("Export error:", err);
+    // Ultimate fallback: download SVG
+    const svgEl2 = buildCalendarSVG();
+    const serializer = new XMLSerializer();
+    let svgStr = serializer.serializeToString(svgEl2);
+    if (!svgStr.includes('xmlns=')) svgStr = svgStr.replace("<svg",'<svg xmlns="http://www.w3.org/2000/svg"');
+    const blob = new Blob([svgStr], { type:"image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const safeName = state.name ? `_${state.name.replace(/\s+/g,"_")}` : "";
+    a.download = `memento_mori${safeName}.svg`;
+    a.click();
+    URL.revokeObjectURL(url);
+    alert("jsPDF no disponible — se descargó el archivo SVG. Ábrelo en Illustrator, Inkscape o Chrome e imprime como PDF.");
+  }
+
+  btn.disabled = false;
+  btn.textContent = "↓ Exportar PDF";
+}
+</script>
+</body>
+</html>
