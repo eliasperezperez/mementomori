@@ -125,6 +125,8 @@
     animation: chipIn .15s ease;
   }
   .week-chip.visible { display: flex; }
+  .week-chip.future { background: #f7f5ff; border-left-color: #8b5cf6; }
+  .week-chip.future .wnum { color: #8b5cf6; }
   .week-chip .wnum { font-size: 15px; color: #111; letter-spacing: -0.5px; line-height: 1; }
   .week-chip .wlabel { font-size: 8px; color: #aaa; letter-spacing: 1px; text-transform: uppercase; }
   .week-chip .wsub { font-size: 8px; color: #bbb; letter-spacing: 0.5px; }
@@ -200,7 +202,7 @@
       <div class="form-box">
         <input type="text" class="sb-input" id="ev-label" placeholder="Nombre del evento"
           onkeydown="if(event.key==='Enter') addEvent()">
-        <input type="date" class="sb-input" id="ev-date" max="" oninput="updateNewEvChip()">
+        <input type="date" class="sb-input" id="ev-date" oninput="updateNewEvChip()">
 
         <!-- Week chip -->
         <div class="week-chip" id="ev-week-chip">
@@ -270,14 +272,14 @@
 const MAX_AGE = 85;
 const TOTAL_WEEKS = MAX_AGE * 52;
 const COLORS = ["#e11d48","#f97316","#f59e0b","#84cc16","#10b981","#06b6d4","#3b82f6","#8b5cf6","#ec4899","#6b7280"];
-const SHAPES = ["circle","square","triangle","heart","star","diamond","asterisk"];
+const SHAPES = ["circle","square","triangle","star","diamond","asterisk"];
 
 // State
 let state = {
   name: "", dob: null,
   weeksLived: 0,
   events: [],
-  newShape: "heart",
+  newShape: "star",
   newColor: "#e11d48",
 };
 
@@ -439,14 +441,18 @@ function updateNewEvChip() {
   if (!dateVal || !state.dob) { chip.classList.remove("visible"); return; }
 
   const w = dateStrToWeek(dateVal);
-  if (w < 0 || w > TOTAL_WEEKS) { chip.classList.remove("visible"); return; }
+  if (w < 0) { chip.classList.remove("visible"); return; }
 
   const yr  = Math.floor(w / 52);
   const wk  = (w % 52) + 1;
   const isFuture = w > state.weeksLived;
+  const isBeyond = w >= TOTAL_WEEKS;
 
-  numEl.textContent = w.toLocaleString();
-  subEl.textContent = `Año ${yr} de tu vida · semana ${wk} de ese año${isFuture ? " · (futura)" : ""}`;
+  numEl.textContent = isBeyond ? "+" + TOTAL_WEEKS.toLocaleString() : w.toLocaleString();
+  subEl.textContent = isBeyond
+    ? `Más allá de los ${MAX_AGE} años proyectados`
+    : `Año ${yr} de tu vida · semana ${wk} de ese año${isFuture ? " · ✦ fecha futura" : ""}`;
+  chip.classList.toggle("future", isFuture && !isBeyond);
   chip.classList.add("visible");
 }
 
@@ -562,7 +568,6 @@ function renderEventsList() {
     dateIn.type = "date";
     dateIn.className = "event-date-input";
     dateIn.value = ev.date;
-    dateIn.max = todayStr;
     dateIn.onchange = function() { updateEventField(ev.id, "date", this.value); };
     div.appendChild(dateIn);
 
@@ -716,7 +721,9 @@ function buildCalendarSVG() {
       if (isNow) {
         el = mk("circle", { cx, cy, r: dotR, fill: "#111" });
       } else if (evs?.length > 0) {
+        const isFutureEv = weekIdx > state.weeksLived;
         el = makeSvgShapeEl(evs[0].shape, evs[0].color, cx, cy, dotR * 1.05, ns);
+        if (el && isFutureEv) el.setAttribute("opacity", "0.4");
       } else if (lived) {
         el = mk("circle", { cx, cy, r: dotR, fill: "#d0d0d0" });
       } else {
@@ -784,70 +791,80 @@ function updatePreview() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// EXPORT PDF (vector via svg2pdf)
+// EXPORT PDF — canvas raster 300 DPI (reliable cross-browser)
 // ═══════════════════════════════════════════════════════════════
 async function exportPDF() {
   const btn = document.getElementById("export-btn");
   btn.disabled = true;
-  btn.textContent = "Exportando...";
+  btn.textContent = "Generando…";
 
   try {
-    // Build the export SVG with correct mm dimensions
+    // 1. Serialize the SVG to a string
     const svgEl = buildCalendarSVG();
-    // Attach temporarily to body (hidden) so svg2pdf can measure it
-    svgEl.style.position = "absolute";
-    svgEl.style.left = "-99999px";
-    document.body.appendChild(svgEl);
+    // Make sure it has the xmlns before serializing
+    svgEl.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    const serializer = new XMLSerializer();
+    const svgStr = serializer.serializeToString(svgEl);
 
-    // Double carta: 279 × 432 mm
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:[279, 432], compress:true });
+    // 2. Draw onto a high-res canvas (300 DPI)
+    const DPI = 300;
+    const W_IN = 279 / 25.4;   // mm → inches
+    const H_IN = 432 / 25.4;
+    const PX_W = Math.round(W_IN * DPI);
+    const PX_H = Math.round(H_IN * DPI);
 
-    if (window.svg2pdf) {
-      await window.svg2pdf(svgEl, doc, { x:0, y:0, width:279, height:432 });
-    } else {
-      // Fallback: high-res raster
-      const canvas = document.createElement("canvas");
-      const DPI = 300;
-      canvas.width  = Math.round((279/25.4) * DPI);
-      canvas.height = Math.round((432/25.4) * DPI);
-      const ctx = canvas.getContext("2d");
-      ctx.fillStyle = "white";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const canvas = document.createElement("canvas");
+    canvas.width  = PX_W;
+    canvas.height = PX_H;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, PX_W, PX_H);
 
-      const serializer = new XMLSerializer();
-      let svgStr = serializer.serializeToString(svgEl);
-      if (!svgStr.includes('xmlns=')) svgStr = svgStr.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
-      const blob = new Blob([svgStr], { type:"image/svg+xml;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
+    // Load SVG into an Image via blob URL
+    const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
+    const url  = URL.createObjectURL(blob);
+
+    await new Promise((resolve, reject) => {
       const img = new Image();
-      await new Promise((res,rej) => { img.onload=res; img.onerror=rej; img.src=url; });
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      URL.revokeObjectURL(url);
-      const imgData = canvas.toDataURL("image/png", 1.0);
-      doc.addImage(imgData, "PNG", 0, 0, 279, 432, undefined, "FAST");
-    }
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, PX_W, PX_H);
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      img.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
+      img.src = url;
+    });
 
-    document.body.removeChild(svgEl);
-    const safeName = state.name ? `_${state.name.replace(/\s+/g,"_")}` : "";
+    // 3. Embed into jsPDF
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: [279, 432],
+      compress: true
+    });
+
+    const imgData = canvas.toDataURL("image/jpeg", 0.96);
+    doc.addImage(imgData, "JPEG", 0, 0, 279, 432);
+
+    const safeName = state.name ? `_${state.name.replace(/\s+/g, "_")}` : "";
     doc.save(`memento_mori${safeName}.pdf`);
 
-  } catch(err) {
+  } catch (err) {
     console.error("Export error:", err);
-    // Ultimate fallback: download SVG
-    const svgEl2 = buildCalendarSVG();
-    const serializer = new XMLSerializer();
-    let svgStr = serializer.serializeToString(svgEl2);
-    if (!svgStr.includes('xmlns=')) svgStr = svgStr.replace("<svg",'<svg xmlns="http://www.w3.org/2000/svg"');
-    const blob = new Blob([svgStr], { type:"image/svg+xml" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    const safeName = state.name ? `_${state.name.replace(/\s+/g,"_")}` : "";
-    a.download = `memento_mori${safeName}.svg`;
-    a.click();
-    URL.revokeObjectURL(url);
-    alert("jsPDF no disponible — se descargó el archivo SVG. Ábrelo en Illustrator, Inkscape o Chrome e imprime como PDF.");
+    // Last-resort: download the SVG directly
+    try {
+      const svgEl2 = buildCalendarSVG();
+      svgEl2.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      const s = new XMLSerializer().serializeToString(svgEl2);
+      const b = new Blob([s], { type: "image/svg+xml" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(b);
+      const safeName = state.name ? `_${state.name.replace(/\s+/g,"_")}` : "";
+      a.download = `memento_mori${safeName}.svg`;
+      a.click();
+      alert("Se descargó como SVG. Ábrelo en Chrome → Imprimir → Guardar como PDF para obtener el archivo final.");
+    } catch(e2) { alert("Error al exportar: " + err.message); }
   }
 
   btn.disabled = false;
