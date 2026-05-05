@@ -356,9 +356,10 @@ function buildEventMap() {
   const map = {};
   state.events.forEach(ev => {
     const w = dateStrToWeek(ev.date);
-    if (w >= 0 && w < TOTAL_WEEKS) {
-      if (!map[w]) map[w] = [];
-      map[w].push(ev);
+    if (w >= 0 && w <= TOTAL_WEEKS) {
+      const key = Math.min(w, TOTAL_WEEKS - 1);
+      if (!map[key]) map[key] = [];
+      map[key].push(ev);
     }
   });
   return map;
@@ -693,14 +694,6 @@ function buildCalendarSVG() {
   const progW = gridW * (state.weeksLived / TOTAL_WEEKS);
   svg.appendChild(mk("line", { x1:mL, y1:headerY+4, x2:mL+progW, y2:headerY+4, stroke:"#111", "stroke-width":1.1 }));
 
-  // Age labels top
-  [0,10,20,30,40,50,60,70,80,85].forEach(yr => {
-    svg.appendChild(mkText(yr.toString(), {
-      x: mL + (yr/85)*gridW, y: gridStartY - 2.5,
-      "font-size": 2.8, fill: "#ccc", "text-anchor": "middle"
-    }));
-  });
-
   // Grid
   for (let yr = 0; yr < MAX_AGE; yr++) {
     const rowY = gridStartY + yr * cellH + cellH / 2;
@@ -737,21 +730,31 @@ function buildCalendarSVG() {
     }
   }
 
-  // Footer legend
-  let lx = mL;
-  const ly = footerY;
+  // Footer legend — multi-row wrapping
   const lr = dotR * 1.1;
-
-  svg.appendChild(mk("line", { x1:mL, y1:ly-3, x2:W-mR, y2:ly-3, stroke:"#eee", "stroke-width":0.2 }));
-
-  // Static legend items
   const legendItems = [
     { type:"lived" }, { type:"future" }, { type:"now" },
     ...state.events.map(ev => ({ type:"event", shape:ev.shape, color:ev.color, label:ev.label }))
   ];
   const LABELS = { lived:"Semana vivida", future:"Semana futura", now:"Hoy" };
+  const maxRowW = W - mL - mR;
+  const rowH = 5.5;       // vertical spacing between legend rows
+  const itemGap = 3;      // horizontal gap between items
+  const charW = 1.62;     // approx mm per character at font-size 2.8
+
+  let lx = mL, ly = footerY;
+  svg.appendChild(mk("line", { x1:mL, y1:ly-3, x2:W-mR, y2:ly-3, stroke:"#eee", "stroke-width":0.2 }));
 
   legendItems.forEach(item => {
+    const lbl = item.label || LABELS[item.type];
+    const itemW = lr*2 + 1.5 + lbl.length * charW + itemGap;
+
+    // Wrap to next row if needed
+    if (lx + itemW > mL + maxRowW && lx > mL) {
+      lx = mL;
+      ly += rowH;
+    }
+
     let icon;
     if (item.type === "lived")  icon = mk("circle", { cx:lx+lr, cy:ly+1.8, r:lr, fill:"#d0d0d0" });
     if (item.type === "future") icon = mk("circle", { cx:lx+lr, cy:ly+1.8, r:lr, fill:"none", stroke:"#e4e4e4", "stroke-width":0.32 });
@@ -759,15 +762,12 @@ function buildCalendarSVG() {
     if (item.type === "event")  icon = makeSvgShapeEl(item.shape, item.color, lx+lr, ly+1.8, lr, ns);
     if (icon) svg.appendChild(icon);
 
-    const lbl = item.label || LABELS[item.type];
-    const txtEl = mkText(lbl, {
+    svg.appendChild(mkText(lbl, {
       x: lx + lr*2 + 1.5, y: ly + 3.2,
       "font-size": 2.8, fill: item.type === "event" ? "#777" : "#aaa"
-    });
-    svg.appendChild(txtEl);
+    }));
 
-    const approxW = lbl.length * 1.75 + lr*2 + 4;
-    lx += approxW;
+    lx += itemW;
   });
 
   // Watermark
